@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.17)
-project(hiredis_vip C)
+project(hiredis-vip C)
 
 set(CMAKE_C_STANDARD 11)
 
@@ -20,7 +20,7 @@ link_directories("/usr/lib64")
 link_directories("/usr/lib")
 include_directories(.)
 
-IF (1)
+IF (0)
     add_executable(${PROJECT_NAME}
             testCluster.c
             adapters/ae.h
