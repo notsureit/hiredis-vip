@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <errno.h>
-
+#include <stdlib.h>
+#include <mhash.h>
 #include "command.h"
 #include "hiutil.h"
 #include "hiarray.h"
@@ -8,6 +9,119 @@
 
 static uint64_t cmd_id = 0;          /* command id counter */
 
+static const struct {
+    const cmd_type_t cmdType;
+    const int cmdSize;
+    const char *cmdCaption;
+    const unsigned noforward;
+    const unsigned quit;
+} supportedRedisCommands[] = {
+        {CMD_REQ_REDIS_GET, 3, "get"},
+        {CMD_REQ_REDIS_SET, 3, "set"},
+        {CMD_REQ_REDIS_TTL, 3, "ttl"},
+        {CMD_REQ_REDIS_DEL, 3, "del"},
+        {CMD_REQ_REDIS_PTTL, 4, "pttl"},
+        {CMD_REQ_REDIS_DECR, 4, "decr"},
+        {CMD_REQ_REDIS_DUMP, 4, "dump"},
+        {CMD_REQ_REDIS_HDEL, 4, "hdel"},
+        {CMD_REQ_REDIS_HGET, 4, "hget"},
+        {CMD_REQ_REDIS_HLEN, 4, "hlen"},
+        {CMD_REQ_REDIS_HSET, 4, "hset"},
+        {CMD_REQ_REDIS_INCR, 4, "incr"},
+        {CMD_REQ_REDIS_LLEN, 4, "llen"},
+        {CMD_REQ_REDIS_LPOP, 4, "lpop"},
+        {CMD_REQ_REDIS_LREM, 4, "lrem"},
+        {CMD_REQ_REDIS_LSET, 4, "lset"},
+        {CMD_REQ_REDIS_RPOP, 4, "rpop"},
+        {CMD_REQ_REDIS_SADD, 4, "sadd"},
+        {CMD_REQ_REDIS_SPOP, 4, "spop"},
+        {CMD_REQ_REDIS_SREM, 4, "srem"},
+        {CMD_REQ_REDIS_TYPE, 4, "type"},
+        {CMD_REQ_REDIS_MGET, 4, "mget"},
+        {CMD_REQ_REDIS_MSET, 4, "mset"},
+        {CMD_REQ_REDIS_ZADD, 4, "zadd"},
+        {CMD_REQ_REDIS_ZREM, 4, "zrem"},
+        {CMD_REQ_REDIS_EVAL, 4, "eval"},
+        {CMD_REQ_REDIS_SORT, 4, "sort"},
+        {CMD_REQ_REDIS_PING, 4, "ping", 1},
+        {CMD_REQ_REDIS_QUIT, 4, "quit", 0, 1},
+        {CMD_REQ_REDIS_AUTH, 4, "auth", 1},
+        {CMD_REQ_REDIS_HKEYS, 5, "hkeys"},
+        {CMD_REQ_REDIS_HMGET, 5, "hmget"},
+        {CMD_REQ_REDIS_HMSET, 5, "hmset"},
+        {CMD_REQ_REDIS_HVALS, 5, "hvals"},
+        {CMD_REQ_REDIS_HSCAN, 5, "hscan"},
+        {CMD_REQ_REDIS_LPUSH, 5, "lpush"},
+        {CMD_REQ_REDIS_LTRIM, 5, "ltrim"},
+        {CMD_REQ_REDIS_RPUSH, 5, "rpush"},
+        {CMD_REQ_REDIS_SCARD, 5, "scard"},
+        {CMD_REQ_REDIS_SDIFF, 5, "sdiff"},
+        {CMD_REQ_REDIS_SETEX, 5, "setex"},
+        {CMD_REQ_REDIS_SETNX, 5, "setnx"},
+        {CMD_REQ_REDIS_SMOVE, 5, "smove"},
+        {CMD_REQ_REDIS_SSCAN, 5, "sscan"},
+        {CMD_REQ_REDIS_ZCARD, 5, "zcard"},
+        {CMD_REQ_REDIS_ZRANK, 5, "zrank"},
+        {CMD_REQ_REDIS_ZSCAN, 5, "zscan"},
+        {CMD_REQ_REDIS_PFADD, 5, "pfadd"},
+        {CMD_REQ_REDIS_APPEND, 6, "append"},
+        {CMD_REQ_REDIS_DECRBY, 6, "decrby"},
+        {CMD_REQ_REDIS_EXISTS, 6, "exists"},
+        {CMD_REQ_REDIS_EXPIRE, 6, "expire"},
+        {CMD_REQ_REDIS_GETBIT, 6, "getbit"},
+        {CMD_REQ_REDIS_GETSET, 6, "getset"},
+        {CMD_REQ_REDIS_PSETEX, 6, "psetex"},
+        {CMD_REQ_REDIS_HSETNX, 6, "hsetnx"},
+        {CMD_REQ_REDIS_INCRBY, 6, "incrby"},
+        {CMD_REQ_REDIS_LINDEX, 6, "lindex"},
+        {CMD_REQ_REDIS_LPUSHX, 6, "lpushx"},
+        {CMD_REQ_REDIS_LRANGE, 6, "lrange"},
+        {CMD_REQ_REDIS_RPUSHX, 6, "rpushx"},
+        {CMD_REQ_REDIS_SETBIT, 6, "setbit"},
+        {CMD_REQ_REDIS_SINTER, 6, "sinter"},
+        {CMD_REQ_REDIS_STRLEN, 6, "strlen"},
+        {CMD_REQ_REDIS_SUNION, 6, "sunion"},
+        {CMD_REQ_REDIS_ZCOUNT, 6, "zcount"},
+        {CMD_REQ_REDIS_ZRANGE, 6, "zrange"},
+        {CMD_REQ_REDIS_ZSCORE, 6, "zscore"},
+        {CMD_REQ_REDIS_PERSIST, 7, "persist"},
+        {CMD_REQ_REDIS_PEXPIRE, 7, "pexpire"},
+        {CMD_REQ_REDIS_HEXISTS, 7, "hexists"},
+        {CMD_REQ_REDIS_HGETALL, 7, "hgetall"},
+        {CMD_REQ_REDIS_HINCRBY, 7, "hincrby"},
+        {CMD_REQ_REDIS_LINSERT, 7, "linsert"},
+        {CMD_REQ_REDIS_ZINCRBY, 7, "zincrby"},
+        {CMD_REQ_REDIS_EVALSHA, 7, "evalsha"},
+        {CMD_REQ_REDIS_RESTORE, 7, "restore"},
+        {CMD_REQ_REDIS_PFCOUNT, 7, "pfcount"},
+        {CMD_REQ_REDIS_PFMERGE, 7, "pfmerge"},
+        {CMD_REQ_REDIS_EXPIREAT, 8, "expireat"},
+        {CMD_REQ_REDIS_BITCOUNT, 8, "bitcount"},
+        {CMD_REQ_REDIS_GETRANGE, 8, "getrange"},
+        {CMD_REQ_REDIS_SETRANGE, 8, "setrange"},
+        {CMD_REQ_REDIS_SMEMBERS, 8, "smembers"},
+        {CMD_REQ_REDIS_ZREVRANK, 8, "zrevrank"},
+        {CMD_REQ_REDIS_PEXPIREAT, 9, "pexpireat"},
+        {CMD_REQ_REDIS_RPOPLPUSH, 9, "rpoplpush"},
+        {CMD_REQ_REDIS_SISMEMBER, 9, "sismember"},
+        {CMD_REQ_REDIS_ZREVRANGE, 9, "zrevrange"},
+        {CMD_REQ_REDIS_ZLEXCOUNT, 9, "zlexcount"},
+        {CMD_REQ_REDIS_SDIFFSTORE, 10, "sdiffstore"},
+        {CMD_REQ_REDIS_INCRBYFLOAT, 11, "incrbyfloat"},
+        {CMD_REQ_REDIS_SINTERSTORE, 11, "sinterstore"},
+        {CMD_REQ_REDIS_SRANDMEMBER, 11, "srandmember"},
+        {CMD_REQ_REDIS_SUNIONSTORE, 11, "sunionstore"},
+        {CMD_REQ_REDIS_ZINTERSTORE, 11, "zinterstore"},
+        {CMD_REQ_REDIS_ZUNIONSTORE, 11, "zunionstore"},
+        {CMD_REQ_REDIS_ZRANGEBYLEX, 11, "zrangebylex"},
+        {CMD_REQ_REDIS_HINCRBYFLOAT, 12, "hincrbyfloat"},
+        {CMD_REQ_REDIS_ZRANGEBYSCORE, 13, "zrangebyscore"},
+        {CMD_REQ_REDIS_ZREMRANGEBYLEX, 14, "zremrangebylex"},
+        {CMD_REQ_REDIS_ZREMRANGEBYRANK, 15, "zremrangebyrank"},
+        {CMD_REQ_REDIS_ZREMRANGEBYSCORE, 16, "zremrangebyscore"},
+        {CMD_REQ_REDIS_ZREVRANGEBYSCORE, 16, "zrevrangebyscore"},
+        {CMD_UNKNOWN, 0, "Unsupported!"}
+};
 
 /*
  * Return true, if the redis command take no key, otherwise
@@ -288,6 +402,31 @@ redis_argeval(struct cmd *r)
     return 0;
 }
 
+static void judgeCommandType(const int len, const char *m, struct cmd *r) {
+    for (int i = 0; i < sizeof(supportedRedisCommands) / sizeof(supportedRedisCommands[0]); i++) {
+        if (supportedRedisCommands[i].cmdSize == len) {
+            if (strncasecmp(supportedRedisCommands[i].cmdCaption, m, len) == 0) {
+                r->type = supportedRedisCommands[i].cmdType;
+                if (supportedRedisCommands[i].noforward)
+                    r->noforward = supportedRedisCommands[i].noforward;
+                if (supportedRedisCommands[i].quit)
+                    r->noforward = supportedRedisCommands[i].quit;
+                return;
+            }
+        }
+    }
+}
+
+static const char *getCommandCaptionByType(cmd_type_t type)
+{
+    for (int i = 0; i < sizeof(supportedRedisCommands) / sizeof(supportedRedisCommands[0]); i++) {
+        if (supportedRedisCommands[i].cmdType == type) {
+            return supportedRedisCommands[i].cmdCaption;
+        }
+    }
+    return supportedRedisCommands[sizeof(supportedRedisCommands) / sizeof(supportedRedisCommands[0]) - 1].cmdCaption;
+}
+
 /*
  * Reference: http://redis.io/topics/protocol
  *
@@ -459,574 +598,7 @@ redis_parse_cmd(struct cmd *r)
             token = NULL;
             r->type = CMD_UNKNOWN;
 
-            switch (p - m) {
-
-            case 3:
-                if (str3icmp(m, 'g', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_GET;
-                    break;
-                }
-
-                if (str3icmp(m, 's', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_SET;
-                    break;
-                }
-
-                if (str3icmp(m, 't', 't', 'l')) {
-                    r->type = CMD_REQ_REDIS_TTL;
-                    break;
-                }
-
-                if (str3icmp(m, 'd', 'e', 'l')) {
-                    r->type = CMD_REQ_REDIS_DEL;
-                    break;
-                }
-
-                break;
-
-            case 4:
-                if (str4icmp(m, 'p', 't', 't', 'l')) {
-                    r->type = CMD_REQ_REDIS_PTTL;
-                    break;
-                }
-
-                if (str4icmp(m, 'd', 'e', 'c', 'r')) {
-                    r->type = CMD_REQ_REDIS_DECR;
-                    break;
-                }
-
-                if (str4icmp(m, 'd', 'u', 'm', 'p')) {
-                    r->type = CMD_REQ_REDIS_DUMP;
-                    break;
-                }
-
-                if (str4icmp(m, 'h', 'd', 'e', 'l')) {
-                    r->type = CMD_REQ_REDIS_HDEL;
-                    break;
-                }
-
-                if (str4icmp(m, 'h', 'g', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_HGET;
-                    break;
-                }
-
-                if (str4icmp(m, 'h', 'l', 'e', 'n')) {
-                    r->type = CMD_REQ_REDIS_HLEN;
-                    break;
-                }
-
-                if (str4icmp(m, 'h', 's', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_HSET;
-                    break;
-                }
-
-                if (str4icmp(m, 'i', 'n', 'c', 'r')) {
-                    r->type = CMD_REQ_REDIS_INCR;
-                    break;
-                }
-
-                if (str4icmp(m, 'l', 'l', 'e', 'n')) {
-                    r->type = CMD_REQ_REDIS_LLEN;
-                    break;
-                }
-
-                if (str4icmp(m, 'l', 'p', 'o', 'p')) {
-                    r->type = CMD_REQ_REDIS_LPOP;
-                    break;
-                }
-
-                if (str4icmp(m, 'l', 'r', 'e', 'm')) {
-                    r->type = CMD_REQ_REDIS_LREM;
-                    break;
-                }
-
-                if (str4icmp(m, 'l', 's', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_LSET;
-                    break;
-                }
-
-                if (str4icmp(m, 'r', 'p', 'o', 'p')) {
-                    r->type = CMD_REQ_REDIS_RPOP;
-                    break;
-                }
-
-                if (str4icmp(m, 's', 'a', 'd', 'd')) {
-                    r->type = CMD_REQ_REDIS_SADD;
-                    break;
-                }
-
-                if (str4icmp(m, 's', 'p', 'o', 'p')) {
-                    r->type = CMD_REQ_REDIS_SPOP;
-                    break;
-                }
-
-                if (str4icmp(m, 's', 'r', 'e', 'm')) {
-                    r->type = CMD_REQ_REDIS_SREM;
-                    break;
-                }
-
-                if (str4icmp(m, 't', 'y', 'p', 'e')) {
-                    r->type = CMD_REQ_REDIS_TYPE;
-                    break;
-                }
-
-                if (str4icmp(m, 'm', 'g', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_MGET;
-                    break;
-                }
-                if (str4icmp(m, 'm', 's', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_MSET;
-                    break;
-                }
-
-                if (str4icmp(m, 'z', 'a', 'd', 'd')) {
-                    r->type = CMD_REQ_REDIS_ZADD;
-                    break;
-                }
-
-                if (str4icmp(m, 'z', 'r', 'e', 'm')) {
-                    r->type = CMD_REQ_REDIS_ZREM;
-                    break;
-                }
-
-                if (str4icmp(m, 'e', 'v', 'a', 'l')) {
-                    r->type = CMD_REQ_REDIS_EVAL;
-                    break;
-                }
-
-                if (str4icmp(m, 's', 'o', 'r', 't')) {
-                    r->type = CMD_REQ_REDIS_SORT;
-                    break;
-                }
-
-                if (str4icmp(m, 'p', 'i', 'n', 'g')) {
-                    r->type = CMD_REQ_REDIS_PING;
-                    r->noforward = 1;
-                    break;
-                }
-
-                if (str4icmp(m, 'q', 'u', 'i', 't')) {
-                    r->type = CMD_REQ_REDIS_QUIT;
-                    r->quit = 1;
-                    break;
-                }
-
-                if (str4icmp(m, 'a', 'u', 't', 'h')) {
-                    r->type = CMD_REQ_REDIS_AUTH;
-                    r->noforward = 1;
-                    break;
-                }
-
-                break;
-
-            case 5:
-                if (str5icmp(m, 'h', 'k', 'e', 'y', 's')) {
-                    r->type = CMD_REQ_REDIS_HKEYS;
-                    break;
-                }
-
-                if (str5icmp(m, 'h', 'm', 'g', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_HMGET;
-                    break;
-                }
-
-                if (str5icmp(m, 'h', 'm', 's', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_HMSET;
-                    break;
-                }
-
-                if (str5icmp(m, 'h', 'v', 'a', 'l', 's')) {
-                    r->type = CMD_REQ_REDIS_HVALS;
-                    break;
-                }
-
-                if (str5icmp(m, 'h', 's', 'c', 'a', 'n')) {
-                    r->type = CMD_REQ_REDIS_HSCAN;
-                    break;
-                }
-
-                if (str5icmp(m, 'l', 'p', 'u', 's', 'h')) {
-                    r->type = CMD_REQ_REDIS_LPUSH;
-                    break;
-                }
-
-                if (str5icmp(m, 'l', 't', 'r', 'i', 'm')) {
-                    r->type = CMD_REQ_REDIS_LTRIM;
-                    break;
-                }
-
-                if (str5icmp(m, 'r', 'p', 'u', 's', 'h')) {
-                    r->type = CMD_REQ_REDIS_RPUSH;
-                    break;
-                }
-
-                if (str5icmp(m, 's', 'c', 'a', 'r', 'd')) {
-                    r->type = CMD_REQ_REDIS_SCARD;
-                    break;
-                }
-
-                if (str5icmp(m, 's', 'd', 'i', 'f', 'f')) {
-                    r->type = CMD_REQ_REDIS_SDIFF;
-                    break;
-                }
-
-                if (str5icmp(m, 's', 'e', 't', 'e', 'x')) {
-                    r->type = CMD_REQ_REDIS_SETEX;
-                    break;
-                }
-
-                if (str5icmp(m, 's', 'e', 't', 'n', 'x')) {
-                    r->type = CMD_REQ_REDIS_SETNX;
-                    break;
-                }
-
-                if (str5icmp(m, 's', 'm', 'o', 'v', 'e')) {
-                    r->type = CMD_REQ_REDIS_SMOVE;
-                    break;
-                }
-
-                if (str5icmp(m, 's', 's', 'c', 'a', 'n')) {
-                    r->type = CMD_REQ_REDIS_SSCAN;
-                    break;
-                }
-
-                if (str5icmp(m, 'z', 'c', 'a', 'r', 'd')) {
-                    r->type = CMD_REQ_REDIS_ZCARD;
-                    break;
-                }
-
-                if (str5icmp(m, 'z', 'r', 'a', 'n', 'k')) {
-                    r->type = CMD_REQ_REDIS_ZRANK;
-                    break;
-                }
-
-                if (str5icmp(m, 'z', 's', 'c', 'a', 'n')) {
-                    r->type = CMD_REQ_REDIS_ZSCAN;
-                    break;
-                }
-
-                if (str5icmp(m, 'p', 'f', 'a', 'd', 'd')) {
-                    r->type = CMD_REQ_REDIS_PFADD;
-                    break;
-                }
-
-                break;
-
-            case 6:
-                if (str6icmp(m, 'a', 'p', 'p', 'e', 'n', 'd')) {
-                    r->type = CMD_REQ_REDIS_APPEND;
-                    break;
-                }
-
-                if (str6icmp(m, 'd', 'e', 'c', 'r', 'b', 'y')) {
-                    r->type = CMD_REQ_REDIS_DECRBY;
-                    break;
-                }
-
-                if (str6icmp(m, 'e', 'x', 'i', 's', 't', 's')) {
-                    r->type = CMD_REQ_REDIS_EXISTS;
-                    break;
-                }
-
-                if (str6icmp(m, 'e', 'x', 'p', 'i', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_EXPIRE;
-                    break;
-                }
-
-                if (str6icmp(m, 'g', 'e', 't', 'b', 'i', 't')) {
-                    r->type = CMD_REQ_REDIS_GETBIT;
-                    break;
-                }
-
-                if (str6icmp(m, 'g', 'e', 't', 's', 'e', 't')) {
-                    r->type = CMD_REQ_REDIS_GETSET;
-                    break;
-                }
-
-                if (str6icmp(m, 'p', 's', 'e', 't', 'e', 'x')) {
-                    r->type = CMD_REQ_REDIS_PSETEX;
-                    break;
-                }
-
-                if (str6icmp(m, 'h', 's', 'e', 't', 'n', 'x')) {
-                    r->type = CMD_REQ_REDIS_HSETNX;
-                    break;
-                }
-
-                if (str6icmp(m, 'i', 'n', 'c', 'r', 'b', 'y')) {
-                    r->type = CMD_REQ_REDIS_INCRBY;
-                    break;
-                }
-
-                if (str6icmp(m, 'l', 'i', 'n', 'd', 'e', 'x')) {
-                    r->type = CMD_REQ_REDIS_LINDEX;
-                    break;
-                }
-
-                if (str6icmp(m, 'l', 'p', 'u', 's', 'h', 'x')) {
-                    r->type = CMD_REQ_REDIS_LPUSHX;
-                    break;
-                }
-
-                if (str6icmp(m, 'l', 'r', 'a', 'n', 'g', 'e')) {
-                    r->type = CMD_REQ_REDIS_LRANGE;
-                    break;
-                }
-
-                if (str6icmp(m, 'r', 'p', 'u', 's', 'h', 'x')) {
-                    r->type = CMD_REQ_REDIS_RPUSHX;
-                    break;
-                }
-
-                if (str6icmp(m, 's', 'e', 't', 'b', 'i', 't')) {
-                    r->type = CMD_REQ_REDIS_SETBIT;
-                    break;
-                }
-
-                if (str6icmp(m, 's', 'i', 'n', 't', 'e', 'r')) {
-                    r->type = CMD_REQ_REDIS_SINTER;
-                    break;
-                }
-
-                if (str6icmp(m, 's', 't', 'r', 'l', 'e', 'n')) {
-                    r->type = CMD_REQ_REDIS_STRLEN;
-                    break;
-                }
-
-                if (str6icmp(m, 's', 'u', 'n', 'i', 'o', 'n')) {
-                    r->type = CMD_REQ_REDIS_SUNION;
-                    break;
-                }
-
-                if (str6icmp(m, 'z', 'c', 'o', 'u', 'n', 't')) {
-                    r->type = CMD_REQ_REDIS_ZCOUNT;
-                    break;
-                }
-
-                if (str6icmp(m, 'z', 'r', 'a', 'n', 'g', 'e')) {
-                    r->type = CMD_REQ_REDIS_ZRANGE;
-                    break;
-                }
-
-                if (str6icmp(m, 'z', 's', 'c', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_ZSCORE;
-                    break;
-                }
-
-                break;
-
-            case 7:
-                if (str7icmp(m, 'p', 'e', 'r', 's', 'i', 's', 't')) {
-                    r->type = CMD_REQ_REDIS_PERSIST;
-                    break;
-                }
-
-                if (str7icmp(m, 'p', 'e', 'x', 'p', 'i', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_PEXPIRE;
-                    break;
-                }
-
-                if (str7icmp(m, 'h', 'e', 'x', 'i', 's', 't', 's')) {
-                    r->type = CMD_REQ_REDIS_HEXISTS;
-                    break;
-                }
-
-                if (str7icmp(m, 'h', 'g', 'e', 't', 'a', 'l', 'l')) {
-                    r->type = CMD_REQ_REDIS_HGETALL;
-                    break;
-                }
-
-                if (str7icmp(m, 'h', 'i', 'n', 'c', 'r', 'b', 'y')) {
-                    r->type = CMD_REQ_REDIS_HINCRBY;
-                    break;
-                }
-
-                if (str7icmp(m, 'l', 'i', 'n', 's', 'e', 'r', 't')) {
-                    r->type = CMD_REQ_REDIS_LINSERT;
-                    break;
-                }
-
-                if (str7icmp(m, 'z', 'i', 'n', 'c', 'r', 'b', 'y')) {
-                    r->type = CMD_REQ_REDIS_ZINCRBY;
-                    break;
-                }
-
-                if (str7icmp(m, 'e', 'v', 'a', 'l', 's', 'h', 'a')) {
-                    r->type = CMD_REQ_REDIS_EVALSHA;
-                    break;
-                }
-
-                if (str7icmp(m, 'r', 'e', 's', 't', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_RESTORE;
-                    break;
-                }
-
-                if (str7icmp(m, 'p', 'f', 'c', 'o', 'u', 'n', 't')) {
-                    r->type = CMD_REQ_REDIS_PFCOUNT;
-                    break;
-                }
-
-                if (str7icmp(m, 'p', 'f', 'm', 'e', 'r', 'g', 'e')) {
-                    r->type = CMD_REQ_REDIS_PFMERGE;
-                    break;
-                }
-
-                break;
-
-            case 8:
-                if (str8icmp(m, 'e', 'x', 'p', 'i', 'r', 'e', 'a', 't')) {
-                    r->type = CMD_REQ_REDIS_EXPIREAT;
-                    break;
-                }
-
-                if (str8icmp(m, 'b', 'i', 't', 'c', 'o', 'u', 'n', 't')) {
-                    r->type = CMD_REQ_REDIS_BITCOUNT;
-                    break;
-                }
-
-                if (str8icmp(m, 'g', 'e', 't', 'r', 'a', 'n', 'g', 'e')) {
-                    r->type = CMD_REQ_REDIS_GETRANGE;
-                    break;
-                }
-
-                if (str8icmp(m, 's', 'e', 't', 'r', 'a', 'n', 'g', 'e')) {
-                    r->type = CMD_REQ_REDIS_SETRANGE;
-                    break;
-                }
-
-                if (str8icmp(m, 's', 'm', 'e', 'm', 'b', 'e', 'r', 's')) {
-                    r->type = CMD_REQ_REDIS_SMEMBERS;
-                    break;
-                }
-
-                if (str8icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'k')) {
-                    r->type = CMD_REQ_REDIS_ZREVRANK;
-                    break;
-                }
-
-                break;
-
-            case 9:
-                if (str9icmp(m, 'p', 'e', 'x', 'p', 'i', 'r', 'e', 'a', 't')) {
-                    r->type = CMD_REQ_REDIS_PEXPIREAT;
-                    break;
-                }
-
-                if (str9icmp(m, 'r', 'p', 'o', 'p', 'l', 'p', 'u', 's', 'h')) {
-                    r->type = CMD_REQ_REDIS_RPOPLPUSH;
-                    break;
-                }
-
-                if (str9icmp(m, 's', 'i', 's', 'm', 'e', 'm', 'b', 'e', 'r')) {
-                    r->type = CMD_REQ_REDIS_SISMEMBER;
-                    break;
-                }
-
-                if (str9icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e')) {
-                    r->type = CMD_REQ_REDIS_ZREVRANGE;
-                    break;
-                }
-
-                if (str9icmp(m, 'z', 'l', 'e', 'x', 'c', 'o', 'u', 'n', 't')) {
-                    r->type = CMD_REQ_REDIS_ZLEXCOUNT;
-                    break;
-                }
-
-                break;
-
-            case 10:
-                if (str10icmp(m, 's', 'd', 'i', 'f', 'f', 's', 't', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_SDIFFSTORE;
-                    break;
-                }
-
-            case 11:
-                if (str11icmp(m, 'i', 'n', 'c', 'r', 'b', 'y', 'f', 'l', 'o', 'a', 't')) {
-                    r->type = CMD_REQ_REDIS_INCRBYFLOAT;
-                    break;
-                }
-
-                if (str11icmp(m, 's', 'i', 'n', 't', 'e', 'r', 's', 't', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_SINTERSTORE;
-                    break;
-                }
-
-                if (str11icmp(m, 's', 'r', 'a', 'n', 'd', 'm', 'e', 'm', 'b', 'e', 'r')) {
-                    r->type = CMD_REQ_REDIS_SRANDMEMBER;
-                    break;
-                }
-
-                if (str11icmp(m, 's', 'u', 'n', 'i', 'o', 'n', 's', 't', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_SUNIONSTORE;
-                    break;
-                }
-
-                if (str11icmp(m, 'z', 'i', 'n', 't', 'e', 'r', 's', 't', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_ZINTERSTORE;
-                    break;
-                }
-
-                if (str11icmp(m, 'z', 'u', 'n', 'i', 'o', 'n', 's', 't', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_ZUNIONSTORE;
-                    break;
-                }
-
-                if (str11icmp(m, 'z', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'l', 'e', 'x')) {
-                    r->type = CMD_REQ_REDIS_ZRANGEBYLEX;
-                    break;
-                }
-
-                break;
-
-            case 12:
-                if (str12icmp(m, 'h', 'i', 'n', 'c', 'r', 'b', 'y', 'f', 'l', 'o', 'a', 't')) {
-                    r->type = CMD_REQ_REDIS_HINCRBYFLOAT;
-                    break;
-                }
-
-
-                break;
-
-            case 13:
-                if (str13icmp(m, 'z', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 's', 'c', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_ZRANGEBYSCORE;
-                    break;
-                }
-
-                break;
-
-            case 14:
-                if (str14icmp(m, 'z', 'r', 'e', 'm', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'l', 'e', 'x')) {
-                    r->type = CMD_REQ_REDIS_ZREMRANGEBYLEX;
-                    break;
-                }
-
-                break;
-
-            case 15:
-                if (str15icmp(m, 'z', 'r', 'e', 'm', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 'r', 'a', 'n', 'k')) {
-                    r->type = CMD_REQ_REDIS_ZREMRANGEBYRANK;
-                    break;
-                }
-
-                break;
-
-            case 16:
-                if (str16icmp(m, 'z', 'r', 'e', 'm', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 's', 'c', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_ZREMRANGEBYSCORE;
-                    break;
-                }
-
-                if (str16icmp(m, 'z', 'r', 'e', 'v', 'r', 'a', 'n', 'g', 'e', 'b', 'y', 's', 'c', 'o', 'r', 'e')) {
-                    r->type = CMD_REQ_REDIS_ZREVRANGEBYSCORE;
-                    break;
-                }
-
-                break;
-
-            default:
-                break;
-            }
+            judgeCommandType(p - m, m, r);
 
             if (r->type == CMD_UNKNOWN) {
                 goto error;
@@ -1615,8 +1187,9 @@ error:
         r->errstr = hi_alloc(100*sizeof(*r->errstr));
     }
 
-    len = _scnprintf(r->errstr, 100, "Parse command error. Cmd type: %d, state: %d, break position: %d.", 
-        r->type, state, (int)(p - r->cmd));
+    len = _scnprintf(r->errstr, 100,
+                     "Parse command error. Cmd type: %d/%s, state: %d, break position: %d.",
+                     r->type, getCommandCaptionByType(r->type), state, (int) (p - r->cmd));
     r->errstr[len] = '\0';
 }
 
