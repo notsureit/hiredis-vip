@@ -95,8 +95,8 @@ static void __inline xreadStartAsync(redisClusterAsyncContext *c, const char *ti
 
 static void __inline xdirectreadStartAsync(redisClusterAsyncContext *c, const char *timesign) {
     int irtn = redisClusterAsyncCommand(c, xreadCallback, (void *) ENUM_REDISREAD_DIRECT,
-                                        "XREAD BLOCK 0 STREAMS %s/%s %s",
-                                        runParams.redis_streamname_read, runParams.myname, timesign);
+                                        "SET 1 123456789");
+//                                        "XREAD BLOCK 0 STREAMS %s/%s %s", runParams.redis_streamname_read, runParams.myname, timesign);
     if (REDIS_OK != irtn)
         fprintf(stderr, "xdirectreadStartAsync %s\n", c->errstr);
 }
@@ -138,7 +138,7 @@ int main(const int argc, const char *asrgv[]) {
     if (ENUM_REDISREAD_BROADCAST == method)
         xreadStartAsync(c, "$");
     else
-        xdirectreadStartAsync(c, "$");
+        xdirectreadStartAsync(c, "0");
 
     event_base_dispatch(base);
 

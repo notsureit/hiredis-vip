@@ -16,6 +16,10 @@ static const struct {
     const unsigned noforward;
     const unsigned quit;
 } supportedRedisCommands[] = {
+        {CMD_REQ_REDIS_XADD, 4, "xadd"},
+        {CMD_REQ_REDIS_XACK, 4, "xack"},
+        {CMD_REQ_REDIS_XREAD, 5, "xread"},
+        {CMD_REQ_REDIS_XREADGROUP, 10, "xreadgroup"},
         {CMD_REQ_REDIS_GET, 3, "get"},
         {CMD_REQ_REDIS_SET, 3, "set"},
         {CMD_REQ_REDIS_TTL, 3, "ttl"},
@@ -402,6 +406,23 @@ redis_argeval(struct cmd *r)
     return 0;
 }
 
+static int
+redis_argstream(struct cmd *r)
+{
+    switch (r->type) {
+        case CMD_REQ_REDIS_XADD:
+        case CMD_REQ_REDIS_XACK:
+        case CMD_REQ_REDIS_XREAD:
+        case CMD_REQ_REDIS_XREADGROUP:
+            return 1;
+
+        default:
+            break;
+    }
+
+    return 0;
+}
+
 static void judgeCommandType(const int len, const char *m, struct cmd *r) {
     for (int i = 0; i < sizeof(supportedRedisCommands) / sizeof(supportedRedisCommands[0]); i++) {
         if (supportedRedisCommands[i].cmdSize == len) {
@@ -460,6 +481,8 @@ redis_parse_cmd(struct cmd *r)
     char ch;
     uint32_t rlen = 0;  /* running length in parsing fsa */
     uint32_t rnarg = 0; /* running # arg used by parsing fsa */
+    char lastArgs[128] = {0}; //保存上次的参数
+
     enum {
         SW_START,
         SW_NARG,
@@ -614,6 +637,8 @@ redis_parse_cmd(struct cmd *r)
                     goto done;
                 } else if (redis_argeval(r)) {
                     state = SW_ARG1_LEN;
+                } else if (redis_argstream(r)) {
+                    state = SW_ARG1_LEN;
                 } else {
                     state = SW_KEY_LEN;
                 }
@@ -742,6 +767,11 @@ redis_parse_cmd(struct cmd *r)
                         goto done;
                     }
                     state = SW_ARGN_LEN;
+                } else if (redis_argstream(r)) {
+                    if (rnarg == 0) {
+                        goto done;
+                    }
+                    state = SW_ARGN_LEN;
                 } else {
                     goto error;
                 }
@@ -862,6 +892,11 @@ redis_parse_cmd(struct cmd *r)
                         goto done;
                     }
                     state = SW_KEY_LEN;
+                } else if (redis_argstream(r)) {
+                    if (rnarg == 0) {
+                        goto done;
+                    }
+                    state = SW_ARGN_LEN;
                 } else {
                     goto error;
                 }
@@ -1115,6 +1150,7 @@ redis_parse_cmd(struct cmd *r)
             break;
 
         case SW_ARGN:
+            strncpy(lastArgs, p, rlen);
             m = p + rlen;
             if (m >= cmd_end) {
                 //rlen -= (uint32_t)(b->last - p);
@@ -1139,6 +1175,14 @@ redis_parse_cmd(struct cmd *r)
             case LF:
                 if (redis_argn(r) || redis_argeval(r)) {
                     if (rnarg == 0) {
+                        goto done;
+                    }
+                    state = SW_ARGN_LEN;
+                } else if (redis_argstream(r)) {
+                    if (strncasecmp(lastArgs, "STREAMS", sizeof("STREAMS") - 1) == 0) {
+                        state = SW_KEY_LEN;
+                        break;
+                    } else if (rnarg == 0) {
                         goto done;
                     }
                     state = SW_ARGN_LEN;

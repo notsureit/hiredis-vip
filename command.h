@@ -126,7 +126,10 @@ typedef enum cmd_parse_result {
     ACTION( RSP_REDIS_BULK )                                                                        \
     ACTION( RSP_REDIS_MULTIBULK )                                                                   \
     ACTION( SENTINEL )                                                                              \
-
+    ACTION( REQ_REDIS_XADD )                                                                        \
+    ACTION( REQ_REDIS_XACK )                                                                              \
+    ACTION( REQ_REDIS_XREAD )                                                                              \
+    ACTION( REQ_REDIS_XREADGROUP )                                                                         \
 
 #define DEFINE_ACTION(_name) CMD_##_name,
 typedef enum cmd_type {
