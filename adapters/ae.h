@@ -35,10 +35,6 @@
 #include "../hiredis.h"
 #include "../async.h"
 
-#if 1 //shenzheng 2015-11-5 redis cluster
-#include "../hircluster.h"
-#endif //shenzheng 2015-11-5 redis cluster
-
 typedef struct redisAeEvents {
     redisAsyncContext *context;
     aeEventLoop *loop;
@@ -100,7 +96,7 @@ static void redisAeCleanup(void *privdata) {
     redisAeEvents *e = (redisAeEvents*)privdata;
     redisAeDelRead(privdata);
     redisAeDelWrite(privdata);
-    free(e);
+    hi_free(e);
 }
 
 static int redisAeAttach(aeEventLoop *loop, redisAsyncContext *ac) {
@@ -112,7 +108,10 @@ static int redisAeAttach(aeEventLoop *loop, redisAsyncContext *ac) {
         return REDIS_ERR;
 
     /* Create container for context and r/w events */
-    e = (redisAeEvents*)malloc(sizeof(*e));
+    e = (redisAeEvents*)hi_malloc(sizeof(*e));
+    if (e == NULL)
+        return REDIS_ERR;
+
     e->context = ac;
     e->loop = loop;
     e->fd = c->fd;
@@ -128,27 +127,4 @@ static int redisAeAttach(aeEventLoop *loop, redisAsyncContext *ac) {
 
     return REDIS_OK;
 }
-
-#if 1 //shenzheng 2015-11-5 redis cluster
-
-static int redisAeAttach_link(redisAsyncContext *ac, void *base)
-{
-	redisAeAttach((aeEventLoop *)base, ac);
-}
-
-static int redisClusterAeAttach(aeEventLoop *loop, redisClusterAsyncContext *acc) {
-
-	if(acc == NULL || loop == NULL)
-	{
-		return REDIS_ERR;
-	}
-
-	acc->adapter = loop;
-	acc->attach_fn = redisAeAttach_link;
-	
-    return REDIS_OK;
-}
-
-#endif //shenzheng 2015-11-5 redis cluster
-
 #endif
