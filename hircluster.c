@@ -23,6 +23,8 @@
 
 #define IP_PORT_SEPARATOR ":"
 
+#define IP_CROSSPORT_SEPARATOR "@"
+
 #define CLUSTER_ADDRESS_SEPARATOR ","
 
 #define CLUSTER_DEFAULT_MAX_REDIRECT_COUNT 5
@@ -566,10 +568,20 @@ static cluster_node *node_get_with_nodes(
         node->slots->free = listClusterSlotDestructor;
     }
     
-    node->name = node_infos[0]; 
-    node->addr = node_infos[1];
+    node->name = node_infos[0];
+    sds thissds = node_infos[1];
+
+    ip_port = sdssplitlen(node_infos[1], sdslen(node_infos[1]),
+                          IP_CROSSPORT_SEPARATOR, strlen(IP_CROSSPORT_SEPARATOR), &count_ip_port);
+    if (ip_port && count_ip_port == 2)
+    {
+        thissds = ip_port[0];
+        sdsfree(ip_port[1]);
+        free(ip_port);
+    }
+    node->addr = thissds;
     
-    ip_port = sdssplitlen(node_infos[1], sdslen(node_infos[1]), 
+    ip_port = sdssplitlen(thissds, sdslen(thissds),
         IP_PORT_SEPARATOR, strlen(IP_PORT_SEPARATOR), &count_ip_port);
     if(ip_port == NULL || count_ip_port != 2)
     {
