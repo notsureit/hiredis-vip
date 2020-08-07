@@ -579,7 +579,7 @@ static cluster_node *node_get_with_nodes(
         sdsfree(ip_port[1]);
         free(ip_port);
     }
-    node->addr = thissds;
+    node->addr = thissds; //这里进行redis服务的真正赋值，去除了可能的redis集群 @内部通讯端口
     
     ip_port = sdssplitlen(thissds, sdslen(thissds),
         IP_PORT_SEPARATOR, strlen(IP_PORT_SEPARATOR), &count_ip_port);
