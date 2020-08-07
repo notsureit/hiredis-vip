@@ -75,10 +75,10 @@ static void xreadCallback(struct redisClusterAsyncContext *c, void *r, void *pri
     if (reply->type == REDIS_REPLY_ERROR)
         return;
 
-    if ((void *) ENUM_REDISREAD_BROADCAST == privdata)
-        xreadStartAsync(c, "$"); //为了避免丢失数据，这里的$要修改为上次数据的时间戳
-    else
-        xdirectreadStartAsync(c, "$");
+//    if ((void *) ENUM_REDISREAD_BROADCAST == privdata)
+//        xreadStartAsync(c, "$"); //为了避免丢失数据，这里的$要修改为上次数据的时间戳
+//    else
+//        xdirectreadStartAsync(c, "$");
 }
 
 /**
@@ -95,8 +95,7 @@ static void __inline xreadStartAsync(redisClusterAsyncContext *c, const char *ti
 
 static void __inline xdirectreadStartAsync(redisClusterAsyncContext *c, const char *timesign) {
     int irtn = redisClusterAsyncCommand(c, xreadCallback, (void *) ENUM_REDISREAD_DIRECT,
-                                        "SET 1 123456789");
-//                                        "XREAD BLOCK 0 STREAMS %s/%s %s", runParams.redis_streamname_read, runParams.myname, timesign);
+                                        "XREAD BLOCK 0 STREAMS %s/%s %s", runParams.redis_streamname_read, runParams.myname, timesign);
     if (REDIS_OK != irtn)
         fprintf(stderr, "xdirectreadStartAsync %s\n", c->errstr);
 }

@@ -48,6 +48,10 @@
 #define REDIS_ERR_TIMEOUT 6 /* Timed out */
 #define REDIS_ERR_OTHER 2 /* Everything else... */
 
+#if 1 //shenzheng 2015-8-10 redis cluster
+#define REDIS_ERR_CLUSTER_TOO_MANY_REDIRECT 7
+#endif //shenzheng 2015-8-10 redis cluster
+
 #define REDIS_REPLY_STRING 1
 #define REDIS_REPLY_ARRAY 2
 #define REDIS_REPLY_INTEGER 3
@@ -65,6 +69,16 @@
 
 /* Default max unused reader buffer. */
 #define REDIS_READER_MAX_BUF (1024*16)
+
+#if 1 //shenzheng 2015-8-22 redis cluster
+#define REDIS_ERROR_MOVED 			"MOVED"
+#define REDIS_ERROR_ASK 			"ASK"
+#define REDIS_ERROR_TRYAGAIN 		"TRYAGAIN"
+#define REDIS_ERROR_CROSSSLOT 		"CROSSSLOT"
+#define REDIS_ERROR_CLUSTERDOWN 	"CLUSTERDOWN"
+
+#define REDIS_STATUS_OK 			"OK"
+#endif //shenzheng 2015-9-24 redis cluster
 
 /* Default multi-bulk element limit */
 #define REDIS_READER_MAX_ARRAY_ELEMENTS ((1LL<<32) - 1)

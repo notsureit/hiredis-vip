@@ -207,7 +207,7 @@ static void __redisClusterSetError(redisClusterContext *cc, int type, const char
     } else {
         /* Only REDIS_ERR_IO may lack a description! */
         assert(type == REDIS_ERR_IO);
-        __redis_strerror_r(errno, cc->errstr, sizeof(cc->errstr));
+        strerror_r(errno, cc->errstr, sizeof(cc->errstr));
     }
 }
 
@@ -664,7 +664,7 @@ static void cluster_nodes_swap_ctx(dict *nodes_f, dict *nodes_t)
 static int
 cluster_slot_start_cmp(const void *t1, const void *t2)
 {
-    const cluster_slot **s1 = t1, **s2 = t2;
+    const cluster_slot **s1 = (const cluster_slot **)t1, **s2 = (const cluster_slot **)t2;
 
     return (*s1)->start > (*s2)->start?1:-1;
 }
@@ -2420,7 +2420,7 @@ int redisClusterSetOptionTimeout(redisClusterContext *cc, const struct timeval t
 
             di = dictGetIterator(cc->nodes);
 
-            while (de=dictNext(di))
+            while ((de=dictNext(di)))
             {
                 node = dictGetEntryVal(de);
                 if (node->con && node->con->flags&REDIS_CONNECTED && node->con->err == 0)
@@ -2435,7 +2435,7 @@ int redisClusterSetOptionTimeout(redisClusterContext *cc, const struct timeval t
                     listNode *ln;
                     
                     li = listGetIterator(node->slaves, AL_START_HEAD);
-                    while (ln = listNext(li))
+                    while ((ln = listNext(li)))
                     {
                         slave = listNodeValue(ln);
                         if (slave->con && slave->con->flags&REDIS_CONNECTED && slave->con->err == 0)
@@ -4253,7 +4253,7 @@ static void __redisClusterAsyncSetError(redisClusterAsyncContext *acc,
     } else {
         /* Only REDIS_ERR_IO may lack a description! */
         assert(type == REDIS_ERR_IO);
-        __redis_strerror_r(errno, acc->errstr, sizeof(acc->errstr));
+        strerror_r(errno, acc->errstr, sizeof(acc->errstr));
     }
 }
 

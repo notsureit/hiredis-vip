@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.17)
 project(hiredis_vip C)
 
-set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD 11)
 
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS} -O2")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS} -O0 -Wall -g -ggdb")
@@ -52,6 +52,11 @@ IF (1)
             read.h
             sds.c
             sds.h
+            sdsalloc.h
+            sockcompat.c
+            sockcompat.h
+            alloc.c
+            alloc.h
             win32.h)
 ELSE ()
     add_library(${PROJECT_NAME} STATIC
@@ -85,13 +90,18 @@ ELSE ()
             read.h
             sds.c
             sds.h
+            sdsalloc.h
+            sockcompat.c
+            sockcompat.h
+            alloc.c
+            alloc.h
             win32.h)
 ENDIF ()
 
 IF (APPLE)
     include_directories("/usr/local/include/mysql")
     include_directories("/usr/local/Cellar/curl/7.66.0/lib")
-    target_link_libraries(${PROJECT_NAME} curl iconv ev z)
+    target_link_libraries(${PROJECT_NAME} curl iconv event z)
 ELSEIF (UNIX)
-    target_link_libraries(${PROJECT_NAME} curl uuid ev z)
+    target_link_libraries(${PROJECT_NAME} curl uuid event z)
 ENDIF ()
