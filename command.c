@@ -1,6 +1,5 @@
 #include <ctype.h>
 #include <errno.h>
-#include <stdlib.h>
 
 #include "command.h"
 #include "hiutil.h"

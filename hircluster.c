@@ -652,7 +652,7 @@ static void cluster_nodes_swap_ctx(dict *nodes_f, dict *nodes_t)
 static int
 cluster_slot_start_cmp(const void *t1, const void *t2)
 {
-    const cluster_slot **s1 = (const cluster_slot **)t1, **s2 = (const cluster_slot **)t2;
+    const cluster_slot **s1 = t1, **s2 = t2;
 
     return (*s1)->start > (*s2)->start?1:-1;
 }
@@ -2408,7 +2408,7 @@ int redisClusterSetOptionTimeout(redisClusterContext *cc, const struct timeval t
 
             di = dictGetIterator(cc->nodes);
 
-            while ((de=dictNext(di)))
+            while (de=dictNext(di))
             {
                 node = dictGetEntryVal(de);
                 if (node->con && node->con->flags&REDIS_CONNECTED && node->con->err == 0)
@@ -2423,7 +2423,7 @@ int redisClusterSetOptionTimeout(redisClusterContext *cc, const struct timeval t
                     listNode *ln;
                     
                     li = listGetIterator(node->slaves, AL_START_HEAD);
-                    while ((ln = listNext(li)))
+                    while (ln = listNext(li))
                     {
                         slave = listNodeValue(ln);
                         if (slave->con && slave->con->flags&REDIS_CONNECTED && slave->con->err == 0)
@@ -2648,7 +2648,6 @@ static cluster_node *node_get_witch_connected(redisClusterContext *cc)
     return NULL;
 }
 
-
 static int slot_get_by_command(redisClusterContext *cc, char *cmd, int len)
 {
     struct cmd *command = NULL;
@@ -2668,7 +2667,7 @@ static int slot_get_by_command(redisClusterContext *cc, char *cmd, int len)
         __redisClusterSetError(cc,REDIS_ERR_OOM,"Out of memory");
         goto done;
     }
-
+    
     command->cmd = cmd;
     command->clen = len;
     redis_parse_cmd(command);
@@ -2692,7 +2691,7 @@ static int slot_get_by_command(redisClusterContext *cc, char *cmd, int len)
 
         goto done;
     }
-
+    
     for(i = 0; i < hiarray_n(command->keys); i ++)
     {
         kp = hiarray_get(command->keys, i);
@@ -2700,14 +2699,14 @@ static int slot_get_by_command(redisClusterContext *cc, char *cmd, int len)
         slot_num = keyHashSlot(kp->start, kp->end - kp->start);
     }
 
-    done:
-
+done:
+    
     if(command != NULL)
     {
         command->cmd = NULL;
         command_destroy(command);
     }
-
+    
     return slot_num;
 }
 
@@ -2907,7 +2906,7 @@ static cluster_node *node_get_by_ask_error_reply(
     redisClusterContext *cc, redisReply *reply)
 {
     sds *part = NULL, *ip_port = NULL;
-    int part_len = 0, ip_port_len = 0;
+    int part_len = 0, ip_port_len;
     dictEntry *de;
     cluster_node *node = NULL;
 
