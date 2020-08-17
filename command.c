@@ -407,13 +407,26 @@ redis_argeval(struct cmd *r)
 }
 
 static int
-redis_argstream(struct cmd *r)
+redis_argstream_read(struct cmd *r)
+{
+    switch (r->type) {
+        case CMD_REQ_REDIS_XREAD:
+        case CMD_REQ_REDIS_XREADGROUP:
+            return 1;
+
+        default:
+            break;
+    }
+
+    return 0;
+}
+
+static int
+redis_argstream_write(struct cmd *r)
 {
     switch (r->type) {
         case CMD_REQ_REDIS_XADD:
         case CMD_REQ_REDIS_XACK:
-        case CMD_REQ_REDIS_XREAD:
-        case CMD_REQ_REDIS_XREADGROUP:
             return 1;
 
         default:
@@ -637,7 +650,7 @@ redis_parse_cmd(struct cmd *r)
                     goto done;
                 } else if (redis_argeval(r)) {
                     state = SW_ARG1_LEN;
-                } else if (redis_argstream(r)) {
+                } else if (redis_argstream_read(r)) {
                     state = SW_ARG1_LEN;
                 } else {
                     state = SW_KEY_LEN;
@@ -767,7 +780,7 @@ redis_parse_cmd(struct cmd *r)
                         goto done;
                     }
                     state = SW_ARGN_LEN;
-                } else if (redis_argstream(r)) {
+                } else if (redis_argstream_read(r) || redis_argstream_write(r)) {
                     if (rnarg == 0) {
                         goto done;
                     }
@@ -892,7 +905,7 @@ redis_parse_cmd(struct cmd *r)
                         goto done;
                     }
                     state = SW_KEY_LEN;
-                } else if (redis_argstream(r)) {
+                } else if (redis_argstream_read(r) || redis_argstream_write(r)) {
                     if (rnarg == 0) {
                         goto done;
                     }
@@ -1178,7 +1191,7 @@ redis_parse_cmd(struct cmd *r)
                         goto done;
                     }
                     state = SW_ARGN_LEN;
-                } else if (redis_argstream(r)) {
+                } else if (redis_argstream_read(r) || redis_argstream_write(r)) {
                     if (strncasecmp(lastArgs, "STREAMS", sizeof("STREAMS") - 1) == 0) {
                         state = SW_KEY_LEN;
                         break;
