@@ -494,7 +494,7 @@ redis_parse_cmd(struct cmd *r)
     char ch;
     uint32_t rlen = 0;  /* running length in parsing fsa */
     uint32_t rnarg = 0; /* running # arg used by parsing fsa */
-    char lastArgs[128] = {0}; //保存上次的参数
+    char lastArgs[2048] = {0}; //FIXME:保存上次的参数，如果太长会出错，需要改进
 
     enum {
         SW_START,
