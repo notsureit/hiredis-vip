@@ -60,7 +60,6 @@ IF (0)
             win32.h)
 ELSE ()
     add_library(${PROJECT_NAME} STATIC
-            testCluster.c
             adapters/ae.h
             adapters/glib.h
             adapters/libev.h
