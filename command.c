@@ -1,7 +1,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <mhash.h>
+#include <string.h>
 #include "command.h"
 #include "hiutil.h"
 #include "hiarray.h"
