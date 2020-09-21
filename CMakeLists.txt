@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 2.8.12.2)
 project(hiredis-vip C)
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_FLAGS "-std=c99")
 
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS} -O2")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS} -O0 -Wall -g -ggdb")
