@@ -33,7 +33,7 @@ struct SRunParam {
         "toplion",
         "192.168.80.140:6379,192.168.80.141:6379,192.168.80.142:6379",
         "iot/inform", "iot/action"
-};;
+};
 
 static void __inline xreadStartAsync(redisClusterAsyncContext *c, const char *timesign);
 
